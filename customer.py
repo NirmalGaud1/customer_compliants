@@ -11,10 +11,16 @@ from tensorflow.keras.models import load_model
 import pickle
 import gdown
 import os
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Cache NLTK data to avoid repeated downloads
 @st.cache_resource
 def load_nltk_data():
+    logger.info("Downloading NLTK data...")
     nltk.download('stopwords')
     nltk.download('wordnet')
     return set(stopwords.words('english')), WordNetLemmatizer()
@@ -33,30 +39,50 @@ def clean_text(text):
 
 # Download model from Google Drive
 model_path = 'bilstm_model.h5'
-model_url = 'https://drive.google.com/uc?id=1FESvhtjQUcmtxDeY_o258JUZGgE2LeIp'  # Your Google Drive file ID
+model_url = 'https://drive.google.com/uc?id=1FESvhtjQUcmtxDeY_o258JUZGgE2LeIp'
 
 if not os.path.exists(model_path):
     try:
         st.info("Downloading model from Google Drive...")
+        logger.info("Starting model download...")
         gdown.download(model_url, model_path, quiet=False)
+        logger.info("Model downloaded successfully")
     except Exception as e:
-        st.error(f"Error downloading model: {e}")
+        logger.error(f"Error downloading model: {str(e)}")
+        st.error(f"Error downloading model: {str(e)}")
         st.stop()
 
 # Load the trained BiLSTM model
 try:
+    logger.info("Loading BiLSTM model...")
     model = load_model(model_path)
+    logger.info("Model loaded successfully")
 except Exception as e:
-    st.error(f"Error loading model: {e}")
+    logger.error(f"Error loading model: {str(e)}")
+    st.error(f"Error loading model: {str(e)}")
     st.stop()
 
 # Load the tokenizer from local file
-tokenizer_path = 'tokenizer.pkl'
-try:
-    with open(tokenizer_path, 'rb') as handle:
-        tokenizer = pickle.load(handle)
-except Exception as e:
-    st.error(f"Error loading tokenizer: {e}")
+tokenizer_paths = [
+    'tokenizer.pkl',  # Root directory
+    'customer_compliants/tokenizer.pkl'  # Subdirectory
+]
+tokenizer = None
+for path in tokenizer_paths:
+    if os.path.exists(path):
+        try:
+            logger.info(f"Attempting to load tokenizer from {path}...")
+            with open(path, 'rb') as handle:
+                tokenizer = pickle.load(handle)
+            logger.info(f"Tokenizer loaded successfully from {path}")
+            break
+        except Exception as e:
+            logger.error(f"Error loading tokenizer from {path}: {str(e)}")
+            continue
+
+if tokenizer is None:
+    logger.error("Failed to load tokenizer from all attempted paths")
+    st.error("Error: Could not load tokenizer. Please check if tokenizer.pkl is in the repository.")
     st.stop()
 
 # Define maximum sequence length (must match the value used in training)
@@ -76,6 +102,7 @@ user_input = st.text_area("Enter the complaint narrative:", height=150)
 if st.button("Classify Complaint"):
     if user_input:
         try:
+            logger.info("Processing user input...")
             # Clean the input text
             cleaned_input = clean_text(user_input)
             
@@ -84,6 +111,7 @@ if st.button("Classify Complaint"):
             input_pad = pad_sequences(input_seq, maxlen=max_length, padding='post')
             
             # Predict the product category
+            logger.info("Making prediction...")
             prediction = model.predict(input_pad, verbose=0)
             predicted_class = np.argmax(prediction, axis=1)[0]
             predicted_category = product_categories[predicted_class]
@@ -92,8 +120,10 @@ if st.button("Classify Complaint"):
             # Display results
             st.success(f"**Predicted Category:** {predicted_category}")
             st.info(f"**Confidence Score:** {confidence:.2f}%")
+            logger.info(f"Prediction successful: {predicted_category} ({confidence:.2f}%)")
         except Exception as e:
-            st.error(f"Error during prediction: {e}")
+            logger.error(f"Error during prediction: {str(e)}")
+            st.error(f"Error during prediction: {str(e)}")
     else:
         st.error("Please enter a complaint narrative.")
 
