@@ -9,6 +9,8 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.models import load_model
 import pickle
+import gdown
+import os
 
 # Cache NLTK data to avoid repeated downloads
 @st.cache_resource
@@ -29,16 +31,29 @@ def clean_text(text):
     text = ' '.join(lemmatizer.lemmatize(word, pos='v') for word in text.split() if word not in stop_words)
     return text
 
+# Download model from Google Drive
+model_path = 'bilstm_model.h5'
+model_url = 'https://drive.google.com/uc?id=1FESvhtjQUcmtxDeY_o258JUZGgE2LeIp'  # Your Google Drive file ID
+
+if not os.path.exists(model_path):
+    try:
+        st.info("Downloading model from Google Drive...")
+        gdown.download(model_url, model_path, quiet=False)
+    except Exception as e:
+        st.error(f"Error downloading model: {e}")
+        st.stop()
+
 # Load the trained BiLSTM model
 try:
-    model = load_model('bilstm_model.h5')
+    model = load_model(model_path)
 except Exception as e:
     st.error(f"Error loading model: {e}")
     st.stop()
 
-# Load the tokenizer
+# Load the tokenizer from local file
+tokenizer_path = 'tokenizer.pkl'
 try:
-    with open('tokenizer.pkl', 'rb') as handle:
+    with open(tokenizer_path, 'rb') as handle:
         tokenizer = pickle.load(handle)
 except Exception as e:
     st.error(f"Error loading tokenizer: {e}")
